@@ -20,6 +20,10 @@
 
 /* User authentication functions for LDAP. */
 
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
+#include <openssl/md5.h>
 #include "dbmail.h"
 #define THIS_MODULE "auth"
 
@@ -43,7 +47,10 @@ typedef struct _ldap_cfg {
 	field_t field_members;
 	field_t query_string;
 	field_t referrals;
+	field_t do_bind_auth;
+	field_t pwcrypt_method;
 	int scope_int, port_int, version_int;
+	int do_bind_auth_int;
 } _ldap_cfg_t;
 
 static _ldap_cfg_t _ldap_cfg;
@@ -51,7 +58,7 @@ static _ldap_cfg_t _ldap_cfg;
 static void __auth_get_config(void)
 {
 	TRACE(TRACE_DEBUG, "Getting LDAP config for dbmail %s (compiled on %s)", VERSION, COMPILATION_TIME);
-
+	
 	GETCONFIGVALUE("BIND_DN",		"LDAP", _ldap_cfg.bind_dn);
 	GETCONFIGVALUE("BIND_PW",		"LDAP", _ldap_cfg.bind_pw);
 	GETCONFIGVALUE("BASE_DN",		"LDAP", _ldap_cfg.base_dn);
@@ -76,6 +83,44 @@ static void __auth_get_config(void)
 	GETCONFIGVALUE("QUERY_STRING",		"LDAP", _ldap_cfg.query_string);
 	GETCONFIGVALUE("SCOPE",			"LDAP", _ldap_cfg.scope);
 	GETCONFIGVALUE("REFERRALS",		"LDAP", _ldap_cfg.referrals);
+	GETCONFIGVALUE("BIND_AUTH",		"LDAP", _ldap_cfg.do_bind_auth);
+	GETCONFIGVALUE("PWCRYPT_METHOD",	"LDAP", _ldap_cfg.pwcrypt_method);
+
+	/**
+	 * Choose whether Ldap auth should be done by binding, or comparing to saved password
+	 * 
+	 * The BIND_AUTH config may be yes/on/1 or no/off/0.
+	 * If BIND_AUTH is not defined, then use is as default.
+	 * For invalid setting values also use BIND_AUTH.
+	 */
+	if (strlen(_ldap_cfg.do_bind_auth) == 0) {
+		_ldap_cfg.do_bind_auth_int = 1; 
+	} else if (strncasecmp(_ldap_cfg.do_bind_auth, "yes", strlen(_ldap_cfg.do_bind_auth)) == 0) {
+		_ldap_cfg.do_bind_auth_int = 1;
+	} else if (strncasecmp(_ldap_cfg.do_bind_auth, "on", strlen(_ldap_cfg.do_bind_auth)) == 0) {
+		_ldap_cfg.do_bind_auth_int = 1;
+	} else if (strncasecmp(_ldap_cfg.do_bind_auth, "1", strlen(_ldap_cfg.do_bind_auth)) == 0) {
+		_ldap_cfg.do_bind_auth_int = 1;
+	} else if (strncasecmp(_ldap_cfg.do_bind_auth, "no", strlen(_ldap_cfg.do_bind_auth)) == 0) {
+		_ldap_cfg.do_bind_auth_int = 0;
+	} else if (strncasecmp(_ldap_cfg.do_bind_auth, "off", strlen(_ldap_cfg.do_bind_auth)) == 0) {
+		_ldap_cfg.do_bind_auth_int = 0;
+	} else if (strncasecmp(_ldap_cfg.do_bind_auth, "0", strlen(_ldap_cfg.do_bind_auth)) == 0) {
+		_ldap_cfg.do_bind_auth_int = 0;
+	}
+
+	TRACE(TRACE_DEBUG, "BIND_AUTH is set to [%d]", _ldap_cfg.do_bind_auth_int);
+
+	if (strlen(_ldap_cfg.pwcrypt_method) == 0) {
+		memcpy(_ldap_cfg.pwcrypt_method, "crypt", 5); 
+	} else if (strncasecmp(_ldap_cfg.pwcrypt_method, "crypt", strlen(_ldap_cfg.do_bind_auth)) == 0) {
+		memcpy(_ldap_cfg.pwcrypt_method, "crypt", 5);
+	} else {
+		// as for now, also for any other cases the crypt method should be "crypt"
+		memcpy(_ldap_cfg.pwcrypt_method, "crypt", 5);
+	}
+
+	TRACE(TRACE_DEBUG, "PWCRYPT is set to [%s]", _ldap_cfg.pwcrypt_method ) ;
 
 	/* Store the port as an integer for later use. */
 	_ldap_cfg.port_int = atoi(_ldap_cfg.port);
@@ -101,6 +146,198 @@ static void __auth_get_config(void)
 	}
 	TRACE(TRACE_DEBUG, "integer ldap scope is [%d]", _ldap_cfg.scope_int);
 }
+
+/**
+ * Code coming from md5_crypt.c
+ *
+ * Source: http://www.koders.com/c/fid9FC646E5199062E7E628F2D427F0F992972F7976.aspx?s=md5#L2
+ */
+
+/*
+ * $Id: md5_crypt.c,v 1.1.1.1 2000/06/20 22:12:03 agmorgan Exp $
+ * $FreeBSD: src/contrib/libpam/modules/pam_unix/md5_crypt.c,v 1.1.1.1.2.2 2001/06/11 15:28:30 markm Exp $
+ *
+ * ----------------------------------------------------------------------------
+ * "THE BEER-WARE LICENSE" (Revision 42):
+ * <phk@login.dknet.dk> wrote this file.  As long as you retain this notice you
+ * can do whatever you want with this stuff. If we meet some day, and you think
+ * this stuff is worth it, you can buy me a beer in return.   Poul-Henning Kamp
+ * ----------------------------------------------------------------------------
+ *
+ * Origin: Id: crypt.c,v 1.3 1995/05/30 05:42:22 rgrimes Exp
+ *
+ */
+
+static char itoa64[] =		/* 0 ... 63 => ascii - 64 */
+	"./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+void
+_crypt_to64(char *s, u_long v, int n)
+{
+	while (--n >= 0) {
+		*s++ = itoa64[v&0x3f];
+		v >>= 6;
+	}
+}
+
+char *
+crypt_md5(const char *pw, const char *salt)
+{
+	MD5_CTX	ctx,ctx1;
+	unsigned long l;
+	int sl, pl;
+	u_int i;
+	u_char final[MD5_DIGEST_LENGTH];
+	static const char *sp, *ep;
+	static char passwd[120], *p;
+	static const char *magic = "$1$";
+
+	/* Refine the Salt first */
+	sp = salt;
+
+	/* If it starts with the magic string, then skip that */
+	if(!strncmp(sp, magic, strlen(magic)))
+		sp += strlen(magic);
+
+	/* It stops at the first '$', max 8 chars */
+	for(ep = sp; *ep && *ep != '$' && ep < (sp + 8); ep++)
+		continue;
+
+	/* get the length of the true salt */
+	sl = ep - sp;
+
+	MD5_Init(&ctx);
+
+	/* The password first, since that is what is most unknown */
+	MD5_Update(&ctx, (const u_char *)pw, strlen(pw));
+
+	/* Then our magic string */
+	MD5_Update(&ctx, (const u_char *)magic, strlen(magic));
+
+	/* Then the raw salt */
+	MD5_Update(&ctx, (const u_char *)sp, (u_int)sl);
+
+	/* Then just as many characters of the MD5(pw,salt,pw) */
+	MD5_Init(&ctx1);
+	MD5_Update(&ctx1, (const u_char *)pw, strlen(pw));
+	MD5_Update(&ctx1, (const u_char *)sp, (u_int)sl);
+	MD5_Update(&ctx1, (const u_char *)pw, strlen(pw));
+	MD5_Final(final, &ctx1);
+	for(pl = (int)strlen(pw); pl > 0; pl -= MD5_DIGEST_LENGTH)
+		MD5_Update(&ctx, (const u_char *)final,
+		    (u_int)(pl > MD5_DIGEST_LENGTH ? MD5_DIGEST_LENGTH : pl));
+
+	/* Don't leave anything around in vm they could use. */
+	memset(final, 0, sizeof(final));
+
+	/* Then something really weird... */
+	for (i = strlen(pw); i; i >>= 1)
+		if(i & 1)
+		    MD5_Update(&ctx, (const u_char *)final, 1);
+		else
+		    MD5_Update(&ctx, (const u_char *)pw, 1);
+
+	/* Now make the output string */
+	strcpy(passwd, magic);
+	strncat(passwd, sp, (u_int)sl);
+	strcat(passwd, "$");
+
+	MD5_Final(final, &ctx);
+
+	/*
+	 * and now, just to make sure things don't run too fast
+	 * On a 60 Mhz Pentium this takes 34 msec, so you would
+	 * need 30 seconds to build a 1000 entry dictionary...
+	 */
+	for(i = 0; i < 1000; i++) {
+		MD5_Init(&ctx1);
+		if(i & 1)
+			MD5_Update(&ctx1, (const u_char *)pw, strlen(pw));
+		else
+			MD5_Update(&ctx1, (const u_char *)final, MD5_DIGEST_LENGTH);
+
+		if(i % 3)
+			MD5_Update(&ctx1, (const u_char *)sp, (u_int)sl);
+
+		if(i % 7)
+			MD5_Update(&ctx1, (const u_char *)pw, strlen(pw));
+
+		if(i & 1)
+			MD5_Update(&ctx1, (const u_char *)final, MD5_DIGEST_LENGTH);
+		else
+			MD5_Update(&ctx1, (const u_char *)pw, strlen(pw));
+		MD5_Final(final, &ctx1);
+	}
+
+	p = passwd + strlen(passwd);
+
+	l = (final[ 0]<<16) | (final[ 6]<<8) | final[12];
+	_crypt_to64(p, l, 4); p += 4;
+	l = (final[ 1]<<16) | (final[ 7]<<8) | final[13];
+	_crypt_to64(p, l, 4); p += 4;
+	l = (final[ 2]<<16) | (final[ 8]<<8) | final[14];
+	_crypt_to64(p, l, 4); p += 4;
+	l = (final[ 3]<<16) | (final[ 9]<<8) | final[15];
+	_crypt_to64(p, l, 4); p += 4;
+	l = (final[ 4]<<16) | (final[10]<<8) | final[ 5];
+	_crypt_to64(p, l, 4); p += 4;
+	l = final[11];
+	_crypt_to64(p, l, 2); p += 2;
+	*p = '\0';
+
+	/* Don't leave anything around in vm they could use. */
+	memset(final, 0, sizeof(final));
+
+	return (passwd);
+}
+
+/* End of copy from md5_crypt.c */
+
+
+/**
+ * Compare a crypted password with the password given by the user
+ *
+ * This function will crypt the user's password too, and compare it to the saved one.
+ *
+ * cryptpass: crypted password stored in LDAP
+ * pass:   the plaintext password what entered by user
+ */
+static int auth_pwcomp(const char *cryptpass, const char *pass) {
+	char *crypted;
+	int encname_len;
+	int ok;
+
+	TRACE(TRACE_DEBUG, "Password entered by the user is [%s]", pass);
+	TRACE(TRACE_DEBUG, "Stored encrypted password is [%s]", cryptpass);
+
+	// Get the length of "scheme" in the leading {scheme} so we can skip it
+	// in the password comparison.
+
+	// where does the password text begin
+	encname_len = strcspn(cryptpass + 1, "}");
+	// let's declare a buffer, where we'll copy the encoding name (make it 1 char longer than the expected string, \0 will be put there)
+	char hash_method[encname_len+1];
+	// copy the hash method from the crypted password string
+	strncpy(hash_method, cryptpass+1, encname_len);
+	// put \0 (end of string) char at the end
+	hash_method[encname_len] = '\0';
+
+	// ensure the hash method is crypt
+	if (strncasecmp(hash_method,  "crypt", strlen(hash_method)) == 0) {
+		TRACE(TRACE_DEBUG, "Password hash method is crypt");
+		crypted=crypt_md5(pass,cryptpass+encname_len+2);
+		TRACE(TRACE_DEBUG, "Password entered by the user after encryption is [%s]", crypted);
+		ok = strcmp(crypted, cryptpass+encname_len+2);
+		TRACE(TRACE_DEBUG, "Result: [%d]", ok);
+	} else {
+		// otherwise show an error message and deny authentication
+		TRACE(TRACE_ERR, "Password hashing method [%s] is not supported ",hash_method);
+		ok = 1;
+	}
+
+	return (0-ok);
+}
+
 
 /*
  initialize thread-local storage
@@ -640,6 +877,24 @@ char *auth_get_userid(u64_t user_idnr)
 	char query[AUTH_QUERY_SIZE];
 	const char *fields[] = { _ldap_cfg.field_uid, NULL };
 	
+	snprintf(query, AUTH_QUERY_SIZE, "(%s=%llu)", _ldap_cfg.field_nid, user_idnr);
+	returnid = __auth_get_first_match(query, fields);
+	TRACE(TRACE_DEBUG, "returned value is [%s]", returnid);
+
+	return returnid;
+}
+
+/* Given a useridnr, find the encrypted password
+ * return 0 if not found, NULL on error
+ *
+ * Code is based on auth_get_userid().
+ */
+char *auth_get_encrypted_password(u64_t user_idnr)
+{
+	char *returnid = NULL;
+	char query[AUTH_QUERY_SIZE];
+	char *fields[] = { _ldap_cfg.field_passwd, NULL };
+
 	snprintf(query, AUTH_QUERY_SIZE, "(%s=%llu)", _ldap_cfg.field_nid, user_idnr);
 	returnid = __auth_get_first_match(query, fields);
 	TRACE(TRACE_DEBUG, "returned value is [%s]", returnid);
@@ -1203,6 +1458,7 @@ int auth_validate(clientbase_t *ci, const char *username, const char *password, 
 	u64_t mailbox_idnr;
 	int ldap_err;
 	char *ldap_dn = NULL;
+	char *_userpw;
 
 	assert(user_idnr != NULL);
 	*user_idnr = 0;
@@ -1241,10 +1497,28 @@ int auth_validate(clientbase_t *ci, const char *username, const char *password, 
 		return 0;
 	}
 
-	/* now, try to rebind as the given DN using the supplied password */
-	TRACE(TRACE_DEBUG, "rebinding as [%s] to validate password", ldap_dn);
-
-	ldap_err = ldap_bind_s(_ldap_conn, ldap_dn, password, LDAP_AUTH_SIMPLE);
+	// decide with Ldap auth method to use (bind, or check encoded password)
+	if (_ldap_cfg.do_bind_auth_int == 0) { // {  BIND_AUTH=NO }
+		// get encrypted password
+		if (!(_userpw = auth_get_encrypted_password(*user_idnr))) {
+			TRACE(TRACE_ERR,"unable to get password for user");
+			return 0;
+		}
+		TRACE(TRACE_DEBUG, "Authenticating with PWCOMPARE for [%s] ", ldap_dn);
+		// bind with admin
+		auth_ldap_bind();
+		// compare the crypted password to the one provided by the user
+		ldap_err = auth_pwcomp(_userpw, password);
+		if (_userpw)
+			ldap_memfree(_userpw);
+	} else if ( _ldap_cfg.do_bind_auth_int == 1) {  // {  BIND_AUTH=YES }
+		// do the authenticating with bind (the original/default behavior)
+		TRACE(TRACE_DEBUG, "Authenticating with BIND AUTH for [%s] ", ldap_dn);
+		ldap_err = ldap_bind_s(_ldap_conn, ldap_dn, password, LDAP_AUTH_SIMPLE);
+	} else {
+		// return an error for any other config value
+		ldap_err = -1;
+	}
 
 	if (ldap_err) {
 		TRACE(TRACE_ERR, "ldap_bind_s failed: %s", ldap_err2string(ldap_err));
