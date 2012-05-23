@@ -50,6 +50,8 @@ static _ldap_cfg_t _ldap_cfg;
 
 static void __auth_get_config(void)
 {
+	TRACE(TRACE_DEBUG, "Getting LDAP config for dbmail %s (compiled on %s)", VERSION, COMPILATION_TIME);
+
 	GETCONFIGVALUE("BIND_DN",		"LDAP", _ldap_cfg.bind_dn);
 	GETCONFIGVALUE("BIND_PW",		"LDAP", _ldap_cfg.bind_pw);
 	GETCONFIGVALUE("BASE_DN",		"LDAP", _ldap_cfg.base_dn);

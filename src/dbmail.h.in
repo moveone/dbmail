@@ -234,6 +234,8 @@
 
 #define MATCH(x,y) ((x) && (y) && (strcasecmp((x),(y))==0))
 
+#define COMPILATION_TIME __DATE__ " " __TIME__
+
 #define min(x,y) ((x)<=(y)?(x):(y))
 #define max(x,y) ((x)>=(y)?(x):(y))
 #define ISCR(a) ((char)(a)=='\r')
