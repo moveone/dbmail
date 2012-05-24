@@ -82,12 +82,21 @@ void cmd_free(cmd_t *cmd)
 	} \
 	return;
 
-#define SESSION_OK \
+/* Macro for OK answers with optional response code */
+#define SESSION_OK_COMMON(RESP_CODE_FORMAT, RESP_CODE_VALUE) \
 	if (self->state != CLIENTSTATE_ERROR) \
 		dbmail_imap_session_buff_printf(self, \
-				"%s OK %s%s completed\r\n", \
-				self->tag, self->use_uid ? "UID " : "", \
+				"%s OK " RESP_CODE_FORMAT "%s%s completed\r\n", \
+				self->tag, RESP_CODE_VALUE, self->use_uid ? "UID " : "", \
 				self->command)
+
+/* The original SESSION_OK macro has been refactored to SESSION_OK_COMMON */
+#define SESSION_OK \
+	SESSION_OK_COMMON("%s", "")
+
+#define SESSION_OK_WITH_RESP_CODE(VALUE) \
+	SESSION_OK_COMMON("[%s] ", VALUE)
+
 /*
  * RETURN VALUES _ic_ functions:
  *
@@ -1289,7 +1298,13 @@ void _ic_append_enter(dm_thread_data *D)
 	dbmail_imap_session_buff_printf(self, "* %u EXISTS\r\n", MailboxState_getExists(M));
 	dbmail_imap_session_buff_printf(self, "* %u RECENT\r\n", MailboxState_getRecent(M));
 
-	SESSION_OK;
+	// create a GString buffer
+	GString *buffer = g_string_new("");
+	// copy the parameters to it
+	g_string_printf(buffer, "APPENDUID %llu %llu", mboxid, message_id);
+	SESSION_OK_WITH_RESP_CODE(buffer->str);
+	// clean up
+	g_string_free(buffer, TRUE);
 	SESSION_RETURN;
 }
 
