@@ -4,3 +4,4 @@ cscope.out
 *.lo
 man/*.[0-9]
 autom4te.cache/
+nbproject
