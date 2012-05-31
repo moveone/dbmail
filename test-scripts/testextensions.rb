@@ -1,3 +1,4 @@
+#!/usr/bin/ruby1.9.1
 # Don't forget to fire up Dbmail's IMAP server before starting this script:
 #  sudo dbmail-imapd
 # Run this file with:
@@ -74,6 +75,7 @@ class TestImap < Test::Unit::TestCase
   def test_greeting
     imap_conn
     res = @imap.greeting
+    assert_match(/(^|[^\w])UIDPLUS([^\w]|$)/, res.data.code.data, 'Imap greeting contains UIDPLUS')
     assert_match(/^ dbmail \d+(\.\d+)+ \(compiled on \w+ \d{1,2} \d{4} \d{1,2}:\d{2}:\d{2}\) ready\.$/, res.data.text, 'Imap greeting contains compilation info')
     imap_logout
   end
@@ -176,5 +178,104 @@ EOF
     end
 
     imap_logout
+  end
+
+  def test_mdnsent
+    imap_conn
+    # take the first imap user
+    user = IMAP_LOGINS[0]
+    @imap.login(user[:username], user[:password])
+
+    # check PERMANENTFLAGS response code
+    @imap.select("inbox")
+    assert(@imap.responses["PERMANENTFLAGS"][-1].include?("$MDNSent"), '$MDNSent in PERMANENTFLAGS: '+@imap.responses["PERMANENTFLAGS"][-1].inspect)
+
+    # append a new message without $MDNSent
+    # save a new message
+    res = @imap.append("inbox", <<EOF.gsub(/\n/, "\r\n"), [:Seen], Time.now)
+Subject: hello mdnsent test
+From: test@moveoneinc.com
+To: test@moveoneinc.com
+
+hello world!
+this is an mdnsent test.
+EOF
+    code = res.data.code
+    uid = code.data.split(" ")[1].to_i
+    
+    # try searching for "NOT $MDNSent" and the appended uid
+    # result should be the expected uid
+    check_search_response(['UID', uid, 'NOT', '$MDNSent'], [uid])
+    
+    # try storing $MDNSent flag on last message
+    assert_nothing_raised(Net::IMAP::NoResponseError) { @imap.uid_store(uid, "+FLAGS", ['$MDNSent']) }
+
+    # try searching for "$MDNSent" and the uid
+    # result should be the expected uid
+    check_search_response(['UID', uid, '$MDNSent'], [uid])
+    # try searching for "NOT $MDNSent" and the appended uid
+    # result should be empty
+    check_search_response(['UID', uid, 'NOT', '$MDNSent'], [])
+
+    # try fetching the message and check for flags
+    check_fetch_response_for_flag(uid, '$MDNSent')
+
+    # try removing the MDNSent flag => should fail
+    assert_raise(Net::IMAP::BadResponseError) { @imap.uid_store(uid, "-FLAGS", ['$MDNSent']) }
+
+    # try copying the message => MDNSent should stay
+    new_uid = @imap.uid_copy_with_new_uid(uid, IMAP_COPYTO)
+    @imap.select(IMAP_COPYTO)
+    # Check for permanentflags again
+    assert(@imap.responses["PERMANENTFLAGS"][-1].include?("$MDNSent"), '$MDNSent in PERMANENTFLAGS: '+@imap.responses["PERMANENTFLAGS"][-1].inspect)
+    # and the MDNSent flag
+    check_fetch_response_for_flag(new_uid, '$MDNSent')
+    # try searching for "$MDNSent" and the uid
+    # result should be the expected uid
+    check_search_response(['UID', new_uid, '$MDNSent'], [new_uid])
+
+    @imap.select("inbox")
+    # append a new message with $MDNSent
+    # save a new message
+    res = @imap.append("inbox", <<EOF.gsub(/\n/, "\r\n"), [:Seen, '$MDNSent'], Time.now)
+Subject: hello mdnsent append test
+From: test@moveoneinc.com
+To: test@moveoneinc.com
+
+hello world!
+this is an mdnsent append test.
+EOF
+    code = res.data.code
+    uid = code.data.split(" ")[1].to_i
+    # retrieve the flags and check MDNSent is there
+    check_fetch_response_for_flag(uid, '$MDNSent')
+    # try searching for "$MDNSent" and the uid
+    # result should be the expected uid
+    check_search_response(['UID', uid, '$MDNSent'], [uid])
+
+  end
+
+  private
+  def check_search_response(search_keys, expected_uids)
+    # Search on imap, returns the uids
+    uids = @imap.uid_search(search_keys)
+    # Assert result uids
+    assert_equal(expected_uids.sort, uids.sort, 'Search result uids match the expected')
+  end
+
+  def check_fetch_response_for_flag(uid, flag)
+    # try fetching the message and check for flags
+    res = @imap.uid_fetch(uid, "FLAGS")
+    checked_uid = false
+    # check for all fetch answers, because server may return data for some other messages too
+    res.each do |x|
+      # run the flag-check just for the expected uid
+      if x['attr']['UID'] == uid
+        checked_uid = true
+        assert(x['attr']['FLAGS'].include?(flag), "#{flag} in returned flags: "+x['attr'].inspect)
+      end
+    end
+    # ensure there has been any check
+    assert_equal(true, checked_uid, 'There has been any check for uid in fetch answer')
   end
 end

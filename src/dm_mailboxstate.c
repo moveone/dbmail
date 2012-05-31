@@ -90,7 +90,7 @@ static T state_load_messages(T M, C c)
 	date2char_str("internal_date", &frag);
 	snprintf(query, DEF_QUERYSIZE,
 			"SELECT seen_flag, answered_flag, deleted_flag, flagged_flag, "
-			"draft_flag, recent_flag, %s, rfcsize, message_idnr FROM %smessages m "
+			"draft_flag, recent_flag, mdnsent_flag, %s, rfcsize, message_idnr FROM %smessages m "
 			"LEFT JOIN %sphysmessage p ON p.id = m.physmessage_id "
 			"WHERE m.mailbox_idnr = %llu AND m.status IN (%d,%d) ORDER BY message_idnr ASC",
 			frag, DBPFX, DBPFX, M->id, MESSAGE_STATUS_NEW, MESSAGE_STATUS_SEEN);
@@ -664,7 +664,7 @@ int MailboxState_count(T M)
 char * MailboxState_flags(T M)
 {
 	char *s = NULL;
-	GString *string = g_string_new("\\Seen \\Answered \\Deleted \\Flagged \\Draft");
+	GString *string = g_string_new("\\Seen \\Answered \\Deleted \\Flagged \\Draft $MDNSent");
 	assert(M);
 
 	if (M->keywords) {

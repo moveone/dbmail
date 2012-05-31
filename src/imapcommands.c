@@ -1229,6 +1229,7 @@ void _ic_append_enter(dm_thread_data *D)
 	    flaglist[IMAP_FLAG_FLAGGED] == 1 ||
 	    flaglist[IMAP_FLAG_RECENT] == 1 ||
 	    flaglist[IMAP_FLAG_DRAFT] == 1 ||
+      flaglist[IMAP_FLAG_MDNSENT] == 1 ||
 	    g_list_length(keywords) > 0) {
 		if ((result = mailbox_check_acl(self, M, ACL_RIGHT_WRITE))) {
 			D->status = result;
@@ -1763,6 +1764,14 @@ static void _ic_store_enter(dm_thread_data *D)
 				g_free(cmd);
 				SESSION_RETURN;
 			}
+
+			/* removing the mdnsent flag explicitely is not allowed */
+			if (cmd->action == IMAPFA_REMOVE && MATCH(self->args[k+i],"$MDNSent")) {
+				dbmail_imap_session_buff_printf(self, "%s BAD $MDNSent flag cannot be removed\r\n", self->tag);
+				D->status = 1;
+				g_free(cmd);
+				SESSION_RETURN;
+			}
 				
 			if (MATCH(self->args[k+i], imap_flag_desc_escaped[j])) {
 				cmd->flaglist[j] = 1;
@@ -1802,6 +1811,7 @@ static void _ic_store_enter(dm_thread_data *D)
 	if (cmd->flaglist[IMAP_FLAG_ANSWERED] == 1 ||
 	    cmd->flaglist[IMAP_FLAG_FLAGGED] == 1 ||
 	    cmd->flaglist[IMAP_FLAG_DRAFT] == 1 ||
+      cmd->flaglist[IMAP_FLAG_MDNSENT] == 1 ||
 	    g_list_length(cmd->keywords) > 0 ) {
 		if ((result = mailbox_check_acl(self, self->mailbox->mbstate, ACL_RIGHT_WRITE))) {
 			dbmail_imap_session_buff_printf(self, "%s NO access denied\r\n", self->tag);

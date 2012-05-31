@@ -87,6 +87,7 @@ CREATE TABLE dbmail_mailboxes (
    flagged_flag INT2 DEFAULT '0' NOT NULL,
    recent_flag INT2 DEFAULT '0' NOT NULL,
    draft_flag INT2 DEFAULT '0' NOT NULL,
+   mdnsent_flag INT2 DEFAULT '0' NOT NULL,
    no_inferiors INT2 DEFAULT '0' NOT NULL,
    no_select INT2 DEFAULT '0' NOT NULL,
    permission INT2 DEFAULT '2' NOT NULL,
@@ -146,6 +147,7 @@ CREATE TABLE dbmail_messages (
    flagged_flag INT2 DEFAULT '0' NOT NULL,
    recent_flag INT2 DEFAULT '0' NOT NULL,
    draft_flag INT2 DEFAULT '0' NOT NULL,
+   mdnsent_flag INT2 DEFAULT '0' NOT NULL,
    unique_id varchar(70) NOT NULL,
    status INT2 DEFAULT '0' NOT NULL,
    PRIMARY KEY (message_idnr)

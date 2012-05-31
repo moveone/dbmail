@@ -695,6 +695,11 @@ static int _handle_search_args(DbmailMailbox *self, char **search_keys, u64_t *i
 		strncpy(value->search, "draft_flag=0", MAX_SEARCH_LEN);
 		(*idx)++;
 	
+	} else if ( MATCH(key, "$mdnsent") ) {
+		value->type = IST_FLAG;
+		strncpy(value->search, "mdnsent_flag=1", MAX_SEARCH_LEN);
+		(*idx)++;
+
 	}
 
 #define IMAP_SET_SEARCH		(*idx)++; \
@@ -912,6 +917,11 @@ static int _handle_search_args(DbmailMailbox *self, char **search_keys, u64_t *i
 			strncpy(value->search, "recent_flag=1", MAX_SEARCH_LEN);
 			(*idx)+=2;
 			
+		} else if ( MATCH(nextkey, "$mdnsent") ) {
+			value->type = IST_FLAG;
+			strncpy(value->search, "mdnsent_flag=0", MAX_SEARCH_LEN);
+			(*idx)+=2;
+
 		} else {
 			value->type = IST_SUBSEARCH_NOT;
 			(*idx)++;

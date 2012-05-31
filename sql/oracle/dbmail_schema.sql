@@ -260,6 +260,7 @@ CREATE TABLE dbmail_mailboxes (
   flagged_flag number(1) DEFAULT '0' NOT NULL,
   recent_flag number(1) DEFAULT '0' NOT NULL,
   draft_flag number(1) DEFAULT '0' NOT NULL,
+  mdnsent_flag number(1) DEFAULT '0' NOT NULL,
   no_inferiors number(1) DEFAULT '0' NOT NULL,
   no_select number(1) DEFAULT '0' NOT NULL,
   permission number(1) DEFAULT '2',
@@ -297,6 +298,7 @@ CREATE TABLE dbmail_messages (
   flagged_flag number(1) DEFAULT '0' NOT NULL,
   recent_flag number(1) DEFAULT '0' NOT NULL,
   draft_flag number(1) DEFAULT '0' NOT NULL,
+  mdnsent_flag number(1) DEFAULT '0' NOT NULL,
   unique_id varchar2(70) default NULL,
   status number(3) DEFAULT '0' NOT NULL
 );

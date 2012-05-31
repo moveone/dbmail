@@ -1031,7 +1031,7 @@ static int _fetch_get_items(ImapSession *self, u64_t *uid)
 	/* set \Seen flag if necessary; note the absence of an error-check 
 	 * for db_get_msgflag()!
 	 */
-	int setSeenSet[IMAP_NFLAGS] = { 1, 0, 0, 0, 0, 0 };
+	int setSeenSet[IMAP_NFLAGS] = { 1, 0, 0, 0, 0, 0, 0 };
 	if (self->fi->setseen && db_get_msgflag("seen", self->msg_idnr) != 1) {
 		/* only if the user has an ACL which grants
 		   him rights to set the flag should the

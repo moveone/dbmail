@@ -68,6 +68,7 @@ CREATE TABLE dbmail_mailboxes (
    flagged_flag BOOLEAN default '0' not null,
    recent_flag BOOLEAN default '0' not null,
    draft_flag BOOLEAN default '0' not null,
+   mdnsent_flag BOOLEAN default '0' not null,
    no_inferiors BOOLEAN default '0' not null,
    no_select BOOLEAN default '0' not null,
    permission BOOLEAN default '2'
@@ -268,6 +269,7 @@ CREATE TABLE dbmail_messages (
    flagged_flag BOOLEAN default '0' not null,
    recent_flag BOOLEAN default '0' not null,
    draft_flag BOOLEAN default '0' not null,
+   mdnsent_flag BOOLEAN default '0' not null,
    unique_id TEXT NOT NULL,
    status BOOLEAN unsigned default '0' not null
 );

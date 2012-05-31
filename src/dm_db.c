@@ -32,11 +32,11 @@
 
 // Flag order defined in dbmailtypes.h
 static const char *db_flag_desc[] = {
-	"seen_flag", "answered_flag", "deleted_flag", "flagged_flag", "draft_flag", "recent_flag" };
+	"seen_flag", "answered_flag", "deleted_flag", "flagged_flag", "draft_flag", "recent_flag", "mdnsent_flag" };
 const char *imap_flag_desc[] = {
-	"Seen", "Answered", "Deleted", "Flagged", "Draft", "Recent" };
+	"Seen", "Answered", "Deleted", "Flagged", "Draft", "Recent", "MDNSent" };
 const char *imap_flag_desc_escaped[] = {
-	"\\Seen", "\\Answered", "\\Deleted", "\\Flagged", "\\Draft", "\\Recent" };
+	"\\Seen", "\\Answered", "\\Deleted", "\\Flagged", "\\Draft", "\\Recent", "$MDNSent" };
 
 extern db_param_t _db_params;
 #define DBPFX _db_params.pfx
@@ -2633,14 +2633,14 @@ int db_copymsg(u64_t msg_idnr, u64_t mailbox_to, u64_t user_idnr,
 		create_unique_id(unique_id, msg_idnr);
 		if (_db_params.db_driver == DM_DRIVER_ORACLE) {
 			db_exec(c, "INSERT INTO %smessages ("
-				"mailbox_idnr,physmessage_id,seen_flag,answered_flag,deleted_flag,flagged_flag,recent_flag,draft_flag,unique_id,status)"
-				" SELECT %llu,physmessage_id,seen_flag,answered_flag,deleted_flag,flagged_flag,%d,draft_flag,'%s',status"
+				"mailbox_idnr,physmessage_id,seen_flag,answered_flag,deleted_flag,flagged_flag,recent_flag,draft_flag,mdnsent_flag,unique_id,status)"
+				" SELECT %llu,physmessage_id,seen_flag,answered_flag,deleted_flag,flagged_flag,%d,draft_flag,mdnsent_flag,'%s',status"
 				" FROM %smessages WHERE message_idnr = %llu %s",DBPFX, mailbox_to, recent, unique_id, DBPFX, msg_idnr, frag);
 			*newmsg_idnr = db_get_pk(c, "messages");
 		} else {
 			r = db_query(c, "INSERT INTO %smessages ("
-				"mailbox_idnr,physmessage_id,seen_flag,answered_flag,deleted_flag,flagged_flag,recent_flag,draft_flag,unique_id,status)"
-				" SELECT %llu,physmessage_id,seen_flag,answered_flag,deleted_flag,flagged_flag,%d,draft_flag,'%s',status"
+				"mailbox_idnr,physmessage_id,seen_flag,answered_flag,deleted_flag,flagged_flag,recent_flag,draft_flag,mdnsent_flag,unique_id,status)"
+				" SELECT %llu,physmessage_id,seen_flag,answered_flag,deleted_flag,flagged_flag,%d,draft_flag,mdnsent_flag,'%s',status"
 				" FROM %smessages WHERE message_idnr = %llu %s",DBPFX, mailbox_to, recent, unique_id, DBPFX, msg_idnr, frag);
 			*newmsg_idnr = db_insert_result(c, r);
 		}
@@ -2794,6 +2794,8 @@ int db_get_msgflag(const char *flag_name, u64_t msg_idnr)
 		snprintf(the_flag_name, DEF_QUERYSIZE / 2, "recent_flag");
 	else if (strcasecmp(flag_name, "draft") == 0)
 		snprintf(the_flag_name, DEF_QUERYSIZE / 2, "draft_flag");
+	else if (strcasecmp(flag_name, "mdnsent") == 0)
+		snprintf(the_flag_name, DEF_QUERYSIZE / 2, "mdnsent_flag");
 	else
 		return DM_SUCCESS;	/* non-existent flag is not set */
 

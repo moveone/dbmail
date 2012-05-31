@@ -262,7 +262,8 @@ enum IMAP4_FLAGS {
 	IMAPFLAG_DELETED	= 0x04, 
 	IMAPFLAG_FLAGGED	= 0x08,
 	IMAPFLAG_DRAFT		= 0x10, 
-	IMAPFLAG_RECENT		= 0x20
+	IMAPFLAG_RECENT		= 0x20,
+	IMAPFLAG_MDNSENT	= 0x40
 };
 
 typedef enum {
@@ -271,7 +272,8 @@ typedef enum {
 	IMAP_FLAG_DELETED,
 	IMAP_FLAG_FLAGGED,
 	IMAP_FLAG_DRAFT,
-	IMAP_FLAG_RECENT
+	IMAP_FLAG_RECENT,
+	IMAP_FLAG_MDNSENT
 } imap_flag_t;
 
 
@@ -554,7 +556,7 @@ typedef struct {
 /*
  * cached message info
  */
-#define IMAP_NFLAGS 6
+#define IMAP_NFLAGS 7
 typedef struct { // map dbmail_messages
 	u64_t mailbox_id;
 	u64_t msn;
