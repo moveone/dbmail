@@ -26,6 +26,24 @@
 #define THIS_MODULE "sievescript"
 #define DBPFX _db_params.pfx
 
+/**
+ * Global sievescript option
+ * Refactored as a macro
+ * ORDER BY name is to make __GLOBAL always the last (thus default; if other names don't start with __)
+ */
+#define GLOBAL_SIEVESCRIPT_QUERY_COMMON(BEGINNING, INITIAL_WHERE, ACTIVE) \
+	BEGINNING " WHERE ((" INITIAL_WHERE ") OR (owner_idnr=3 AND name='__GLOBAL'" ACTIVE ")) ORDER BY name ASC LIMIT 1"
+/**
+ * Macro for searching global and active+inactive
+ */
+#define GLOBAL_SIEVESCRIPT_QUERY(BEGINNING, INITIAL_WHERE) \
+	GLOBAL_SIEVESCRIPT_QUERY_COMMON(BEGINNING, INITIAL_WHERE, "")
+/**
+ * Macro for searching global and active
+ */
+#define GLOBAL_SIEVESCRIPT_QUERY_ACTIVE(BEGINNING, INITIAL_WHERE) \
+	GLOBAL_SIEVESCRIPT_QUERY_COMMON(BEGINNING, INITIAL_WHERE, " AND active = 1")
+
 extern db_param_t _db_params;
 
 int dm_sievescript_getbyname(u64_t user_idnr, char *scriptname, char **script)
@@ -35,7 +53,7 @@ int dm_sievescript_getbyname(u64_t user_idnr, char *scriptname, char **script)
 				
 	c = db_con_get();
 	TRY
-		s = db_stmt_prepare(c, "SELECT script FROM %ssievescripts WHERE owner_idnr = ? AND name = ?", DBPFX);
+		s = db_stmt_prepare(c, GLOBAL_SIEVESCRIPT_QUERY("SELECT script FROM %ssievescripts", "owner_idnr = ? AND name = ?"), DBPFX);
 		db_stmt_set_u64(s, 1, user_idnr);
 		db_stmt_set_str(s, 2, scriptname);
 
@@ -64,11 +82,11 @@ int dm_sievescript_isactive_byname(u64_t user_idnr, const char *scriptname)
 	c = db_con_get();
 	TRY
 		if (scriptname) {
-			s = db_stmt_prepare(c, "SELECT name FROM %ssievescripts WHERE owner_idnr = ? AND active = 1 AND name = ?", DBPFX);
+			s = db_stmt_prepare(c, GLOBAL_SIEVESCRIPT_QUERY_ACTIVE("SELECT name FROM %ssievescripts", "owner_idnr = ? AND active = 1 AND name = ?"), DBPFX);
 			db_stmt_set_u64(s, 1, user_idnr);
 			db_stmt_set_str(s, 2, scriptname);
 		} else {
-			s = db_stmt_prepare(c, "SELECT name FROM %ssievescripts WHERE owner_idnr = ? AND active = 1", DBPFX);
+			s = db_stmt_prepare(c, GLOBAL_SIEVESCRIPT_QUERY_ACTIVE("SELECT name FROM %ssievescripts", "owner_idnr = ? AND active = 1"), DBPFX);
 			db_stmt_set_u64(s, 1, user_idnr);
 		}
 
@@ -93,7 +111,7 @@ int dm_sievescript_get(u64_t user_idnr, char **scriptname)
 
 	c = db_con_get();
 	TRY
-		r = db_query(c, "SELECT name from %ssievescripts where owner_idnr = %llu and active = 1", DBPFX, user_idnr);
+		r = db_query(c, GLOBAL_SIEVESCRIPT_QUERY_ACTIVE("SELECT name from %ssievescripts", "owner_idnr = %llu and active = 1"), DBPFX, user_idnr);
 		if (db_result_next(r))
 			 *scriptname = g_strdup(db_result_get(r,0));
 
