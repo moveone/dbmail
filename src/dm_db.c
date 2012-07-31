@@ -1913,8 +1913,6 @@ static int mailboxes_by_regex(u64_t user_idnr, int only_subscribed, const char *
 	if (mailbox_like && mailbox_like->sensitive)
 		g_string_append_printf(qs, " AND mbx.name %s ? ", db_get_sql(SQL_SENSITIVE_LIKE));
 
-	g_string_append(qs, " ORDER BY mbx.name");
-
 	c = db_con_get();
 	TRY
 		stmt = db_stmt_prepare(c, qs->str);

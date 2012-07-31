@@ -173,6 +173,7 @@ T MailboxState_new(u64_t id)
 	volatile int t = DM_SUCCESS;
 
 	M = g_malloc0(sizeof(*M));
+	//TRACE(TRACE_DEBUG,"reserving MailboxState_T pointer [%d]", M);
 	M->id = id;
 	if (! id) return M;
 
@@ -404,6 +405,7 @@ unsigned MailboxState_getUnseen(T M)
 void MailboxState_free(T *M)
 {
 	T s = *M;
+	//TRACE(TRACE_DEBUG,"freeing MailboxState_T pointer [%d]", s);
 	if (s->name) g_free(s->name);
 	s->name = NULL;
 
